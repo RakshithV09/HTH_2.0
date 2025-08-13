@@ -3,15 +3,21 @@ from django.contrib.auth.models import User
 
 class Revenue(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    source = models.CharField(max_length=100)
+    source = models.CharField(max_length=255)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     date = models.DateField()
+    
+    def __str__(self):
+        return f"{self.source} - {self.amount}"
 
 class Expense(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    category = models.CharField(max_length=100)
+    category = models.CharField(max_length=255)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     date = models.DateField()
+    
+    def __str__(self):
+        return f"{self.category} - {self.amount}"
 
 class AccountsReceivable(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
