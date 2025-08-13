@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+
+# Virtual environment
+venv/
+
+# Environment variables & secrets
+.env
+
+# Database dumps & sensitive files
+*.sql
+*.db
+
+# macOS files
+.DS_Store
+
+# VS Code settings
+.vscode/
