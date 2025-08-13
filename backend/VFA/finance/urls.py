@@ -5,19 +5,21 @@ from .views import (
     AccountsPayableViewSet,
     BudgetVsActualViewSet,
     upload_revenue_csv,
+    upload_accounts_receivable_csv,
+    upload_accounts_payable_csv,
+    upload_budget_vs_actual_csv
 )
 
-# Create a DRF router for ViewSets
 router = DefaultRouter()
 router.register(r'accounts-receivable', AccountsReceivableViewSet)
 router.register(r'accounts-payable', AccountsPayableViewSet)
 router.register(r'budget-vs-actual', BudgetVsActualViewSet)
 
-# URL patterns for function-based views + router URLs
 urlpatterns = [
-    # CSV upload endpoint
     path('upload-revenue-csv/', upload_revenue_csv, name='upload-revenue-csv'),
+    path('upload-accounts-receivable-csv/', upload_accounts_receivable_csv, name='upload-accounts-receivable-csv'),
+    path('upload-accounts-payable-csv/', upload_accounts_payable_csv, name='upload-accounts-payable-csv'),
+    path('upload-budget-vs-actual-csv/', upload_budget_vs_actual_csv, name='upload-budget-vs-actual-csv'),
 ]
 
-# Add the automatically generated router URLs
 urlpatterns += router.urls
