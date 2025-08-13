@@ -1,3 +1,4 @@
+# finance/views.py
 import pandas as pd
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import api_view, permission_classes, parser_classes
@@ -9,25 +10,97 @@ from django.utils.dateparse import parse_date
 
 from .models import Revenue, AccountsReceivable, AccountsPayable, BudgetVsActual
 from .serializers import (
+    RevenueSerializer,
     AccountsReceivableSerializer,
     AccountsPayableSerializer,
     BudgetVsActualSerializer,
-    CSVUploadSerializer  # Make sure you've added CSVUploadSerializer in serializers.py
+    CSVUploadSerializer
 )
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+# finance/views.py
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from users.utils import is_viewer, get_user_groups
+
+# Example in finance/views.py
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from users.utils import is_viewer, get_user_groups
+
+@api_view(['GET'])
+def check_user_role(request):
+    if is_viewer(request.user):
+        print("This is a viewer")
+
+    groups = get_user_groups(request.user)
+    print(groups)  # will log in console
+
+    return Response({
+        "username": request.user.username,
+        "groups": groups
+    })
+
+@api_view(['GET'])
+def check_user_role(request):
+    if is_viewer(request.user):
+        print("This is a viewer")
+    print(get_user_groups(request.user))
+    return Response({
+        "groups": get_user_groups(request.user)
+    })
+    
+@api_view(['GET'])
+def my_view(request):
+    if request.user.groups.filter(name='Viewer').exists():
+        return Response({"role": "Viewer"})
+    elif request.user.groups.filter(name='Business Owner').exists():
+        return Response({"role": "Business Owner"})
+    elif request.user.groups.filter(name='Finance Team').exists():
+        return Response({"role": "Finance Team"})
+    else:
+        return Response({"role": "No group assigned"})
+
+# ✅ Custom role-based permission
+from users.permissions import IsInGroup
+
+
+# -------- Restricted function-based view example --------
+@api_view(['GET'])
+@permission_classes([IsInGroup])  # Only Business Owner & Finance Team
+def restricted_summary(request):
+    return Response({"message": "You have permission to view this!"})
+
+
+# ---------------- Revenue ViewSet ----------------
+class RevenueViewSet(viewsets.ModelViewSet):
+    queryset = Revenue.objects.all()
+    serializer_class = RevenueSerializer
+    permission_classes = [IsAuthenticated]  # default for all actions unless overridden
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    # ✅ Restrict only 'create' action
+    def get_permissions(self):
+        if self.action == 'create':
+            return [IsInGroup()]
+        return super().get_permissions()
+    def list(self, request, *args, **kwargs):
+        user_groups = list(request.user.groups.values_list('name', flat=True))
+        print("User groups:", user_groups)  # debug in console
+        return super().list(request, *args, **kwargs)
 
 # ---------------- CSV/JSON Upload for Revenues ----------------
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsInGroup])  # Only specific roles upload revenues
 @parser_classes([MultiPartParser, FormParser, JSONParser])
 def upload_revenue_csv(request):
-    """
-    Accepts:
-    - multipart/form-data with a CSV file (key='file')
-    - application/json with an array of revenue records
-    """
     created_count = 0
 
-    # ---------- Option 1: CSV file upload ----------
     if 'file' in request.FILES:
         serializer = CSVUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -59,7 +132,6 @@ def upload_revenue_csv(request):
 
         return Response({"status": "success", "records_created": created_count})
 
-    # ---------- Option 2: JSON array upload ----------
     elif isinstance(request.data, list):
         for row in request.data:
             try:
@@ -80,119 +152,11 @@ def upload_revenue_csv(request):
     return Response({"error": "No file uploaded or invalid JSON body"}, status=400)
 
 
-# ---------------- CSV Upload for Accounts Receivable ----------------
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-@parser_classes([MultiPartParser, FormParser])
-def upload_accounts_receivable_csv(request):
-    serializer = CSVUploadSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-
-    file = serializer.validated_data['file']
-    try:
-        df = pd.read_csv(file)
-    except Exception as e:
-        return Response({"error": f"Error reading CSV: {str(e)}"}, status=400)
-
-    required_columns = {'client', 'amount_due', 'due_date'}
-    if not required_columns.issubset(df.columns):
-        return Response({"error": f"Missing columns: {', '.join(required_columns)}"}, status=400)
-
-    count = 0
-    for _, row in df.iterrows():
-        try:
-            date_value = parse_date(str(row['due_date']))
-            if not date_value:
-                continue
-            AccountsReceivable.objects.create(
-                user=request.user,
-                client=row['client'],
-                amount_due=row['amount_due'],
-                due_date=date_value
-            )
-            count += 1
-        except (IntegrityError, KeyError, ValueError):
-            continue
-
-    return Response({"status": "success", "records_created": count})
-
-
-# ---------------- CSV Upload for Accounts Payable ----------------
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-@parser_classes([MultiPartParser, FormParser])
-def upload_accounts_payable_csv(request):
-    serializer = CSVUploadSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-
-    file = serializer.validated_data['file']
-    try:
-        df = pd.read_csv(file)
-    except Exception as e:
-        return Response({"error": f"Error reading CSV: {str(e)}"}, status=400)
-
-    required_columns = {'vendor', 'amount_owed', 'due_date'}
-    if not required_columns.issubset(df.columns):
-        return Response({"error": f"Missing columns: {', '.join(required_columns)}"}, status=400)
-
-    count = 0
-    for _, row in df.iterrows():
-        try:
-            date_value = parse_date(str(row['due_date']))
-            if not date_value:
-                continue
-            AccountsPayable.objects.create(
-                user=request.user,
-                vendor=row['vendor'],
-                amount_owed=row['amount_owed'],
-                due_date=date_value
-            )
-            count += 1
-        except (IntegrityError, KeyError, ValueError):
-            continue
-
-    return Response({"status": "success", "records_created": count})
-
-
-# ---------------- CSV Upload for Budget vs Actual ----------------
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-@parser_classes([MultiPartParser, FormParser])
-def upload_budget_vs_actual_csv(request):
-    serializer = CSVUploadSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-
-    file = serializer.validated_data['file']
-    try:
-        df = pd.read_csv(file)
-    except Exception as e:
-        return Response({"error": f"Error reading CSV: {str(e)}"}, status=400)
-
-    required_columns = {'period', 'budgeted_amount', 'actual_amount'}
-    if not required_columns.issubset(df.columns):
-        return Response({"error": f"Missing columns: {', '.join(required_columns)}"}, status=400)
-
-    count = 0
-    for _, row in df.iterrows():
-        try:
-            BudgetVsActual.objects.create(
-                user=request.user,
-                period=row['period'],
-                budgeted_amount=row['budgeted_amount'],
-                actual_amount=row['actual_amount']
-            )
-            count += 1
-        except (IntegrityError, KeyError, ValueError):
-            continue
-
-    return Response({"status": "success", "records_created": count})
-
-
 # ---------------- Accounts Receivable ViewSet ----------------
 class AccountsReceivableViewSet(viewsets.ModelViewSet):
     queryset = AccountsReceivable.objects.all()
     serializer_class = AccountsReceivableSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)
@@ -205,7 +169,7 @@ class AccountsReceivableViewSet(viewsets.ModelViewSet):
 class AccountsPayableViewSet(viewsets.ModelViewSet):
     queryset = AccountsPayable.objects.all()
     serializer_class = AccountsPayableSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)
@@ -218,7 +182,7 @@ class AccountsPayableViewSet(viewsets.ModelViewSet):
 class BudgetVsActualViewSet(viewsets.ModelViewSet):
     queryset = BudgetVsActual.objects.all()
     serializer_class = BudgetVsActualSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)

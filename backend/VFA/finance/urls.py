@@ -1,25 +1,25 @@
-from django.urls import path
+# finance/urls.py
+from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
+    RevenueViewSet,
+    upload_revenue_csv,
     AccountsReceivableViewSet,
     AccountsPayableViewSet,
     BudgetVsActualViewSet,
-    upload_revenue_csv,
-    upload_accounts_receivable_csv,
-    upload_accounts_payable_csv,
-    upload_budget_vs_actual_csv
+    restricted_summary,
+    check_user_role,
 )
 
 router = DefaultRouter()
-router.register(r'accounts-receivable', AccountsReceivableViewSet)
-router.register(r'accounts-payable', AccountsPayableViewSet)
-router.register(r'budget-vs-actual', BudgetVsActualViewSet)
+router.register(r'revenues', RevenueViewSet, basename='revenue')
+router.register(r'accounts-receivable', AccountsReceivableViewSet, basename='accounts-receivable')
+router.register(r'accounts-payable', AccountsPayableViewSet, basename='accounts-payable')
+router.register(r'budget-vs-actual', BudgetVsActualViewSet, basename='budget-vs-actual')
 
 urlpatterns = [
-    path('upload-revenue-csv/', upload_revenue_csv, name='upload-revenue-csv'),
-    path('upload-accounts-receivable-csv/', upload_accounts_receivable_csv, name='upload-accounts-receivable-csv'),
-    path('upload-accounts-payable-csv/', upload_accounts_payable_csv, name='upload-accounts-payable-csv'),
-    path('upload-budget-vs-actual-csv/', upload_budget_vs_actual_csv, name='upload-budget-vs-actual-csv'),
+    path('upload-revenues/', upload_revenue_csv, name='upload-revenue-csv'),
+    path('restricted-summary/', restricted_summary, name='restricted-summary'),
+    path('check-role/', check_user_role, name='check-user-role'),
+    path('', include(router.urls)),
 ]
-
-urlpatterns += router.urls

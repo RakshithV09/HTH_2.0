@@ -1,6 +1,12 @@
 from rest_framework import serializers
 from .models import AccountsReceivable, AccountsPayable, BudgetVsActual
 from rest_framework import serializers
+from .models import Revenue  # Also ensure models.py defines Revenue correctly
+
+class RevenueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Revenue
+        fields = '__all__'
 
 class CSVUploadSerializer(serializers.Serializer):
     file = serializers.FileField(required=True)
